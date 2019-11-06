@@ -44,7 +44,7 @@ SCRIPT
 $install_misc = <<-SCRIPT
    apt update
    apt install mc -y
-   echo -e "192.168.1.11       srv1\n192.168.1.12       srv2\n172.16.94.11       es-node1\n172.16.94.12       es-node2\n172.16.94.13       es-node3">> /etc/hosts
+   echo -e "192.168.1.11       srv1\n192.168.1.12       srv2\n192.168.1.100       srv\n172.16.94.11       es-node1\n172.16.94.12       es-node2\n172.16.94.13       es-node3">> /etc/hosts
    sed -i 's/127.0.1.1/#127.0.1.1/g' /etc/hosts
 SCRIPT
 
@@ -118,7 +118,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     es1.vm.box = "bento/ubuntu-18.04"
     es1.vm.hostname = "es-node1"
     es1.vm.network :private_network, ip: "172.16.94.11"
-	es1.vm.provider "virtualbox" do |esvm|
+    es1.vm.provider "virtualbox" do |esvm|
       esvm.memory = 1024
     end
     config.vm.provision "script1", type: "shell" do |shell|
@@ -134,7 +134,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     es2.vm.box = "bento/ubuntu-18.04"
     es2.vm.hostname = "es-node2"
     es2.vm.network :private_network, ip: "172.16.94.12"
-	es2.vm.provider "virtualbox" do |esvm|
+    es2.vm.provider "virtualbox" do |esvm|
       esvm.memory = 1024
     end
     config.vm.provision "script1", type: "shell" do |shell|
@@ -150,7 +150,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     es3.vm.box = "bento/ubuntu-18.04"
     es3.vm.hostname = "es-node3"
     es3.vm.network :private_network, ip: "172.16.94.13"
-	es3.vm.provider "virtualbox" do |esvm|
+    es3.vm.provider "virtualbox" do |esvm|
       esvm.memory = 1024
     end
     config.vm.provision "script1", type: "shell" do |shell|
