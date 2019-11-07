@@ -1,3 +1,10 @@
+#provisioning of srv2 with optional set of scripts
+#it can be configured as a rsyslog or filebeat client for logstash server
+vagrant up srv2 --provision --provision-with misc,haproxy,logstash_filebeat
+vagrant up srv2 --provision --provision-with misc,haproxy,logstash_rsyslog
+
+#commands to test logstash service
 curl http://srv:9200/_cluster/health?pretty
 curl http://srv:9200/_cat/master
 curl http://srv:9200/_cat/nodes?h=ip,port,heapPercent,name
+

@@ -41,6 +41,24 @@ $install_keepalived_haproxy = <<-SCRIPT
 
 SCRIPT
 
+$configure_rsyslog = <<-SCRIPT
+  rm -fv /etc/rsyslog.d/50-default.conf
+  #copy rsyslog file that transfers syslogs to rsyslog-server
+  cp -v /vagrant/srv2/50-default.conf /etc/rsyslog.d/
+  systemctl restart rsyslog
+SCRIPT
+
+$configure_filebeat = <<-SCRIPT
+  #no ssl encryption to to some error (protocol mismatch 3, please see logstash part)
+  wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo apt-key add -
+  apt-get install apt-transport-https -y
+  echo "deb https://artifacts.elastic.co/packages/6.x/apt stable main" | sudo tee -a /etc/apt/sources.list.d/elastic-6.x.list
+  apt-get update
+  apt-get install filebeat
+  cp -v /vagrant/srv2/filebeat/filebeat.yml /etc/filebeat/
+SCRIPT
+
+
 $install_misc = <<-SCRIPT
    apt update
    apt install mc -y
@@ -50,6 +68,7 @@ SCRIPT
 
 $install_es_cluster = <<-SCRIPT
    nod_nam=$1
+   rsyslog_or_filebeat=$2
 
    wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo apt-key add -
    echo "deb https://artifacts.elastic.co/packages/6.x/apt stable main" | sudo tee -a /etc/apt/sources.list.d/elastic-6.x.list
@@ -65,6 +84,9 @@ $install_es_cluster = <<-SCRIPT
           cp -v /vagrant/${nod_nam}/jvm.options /etc/elasticsearch/jvm.options
           cp -v /vagrant/${nod_nam}/elasticsearch.yml /etc/elasticsearch/elasticsearch.yml
           sudo apt install elasticsearch openjdk-8-jre-headless -y
+          systemctl status elasticsearch
+          systemctl start elasticsearch
+
           ;;
      kibana)
           echo "add service and run kibana on"$nod_nam
@@ -84,12 +106,48 @@ $install_es_cluster = <<-SCRIPT
           echo "add service and run logstash on"$nod_nam
           #cp -v /vagrant/es-node3/jvm.options /etc/elasticsearch/jvm.options
           #cp -v /vagrant/es-node3/elasticsearch.yml /etc/elasticsearch/elasticsearch.yml
-          sudo apt install logstash -y
+          apt install openjdk-8-jre-headless -y
+          touch /etc/default/logstash
+          apt install logstash -y
+          systemctl stop logstash
+
+          if [ $rsyslog_or_filebeat == "rsyslog" ]; then
+            echo    ""
+            echo    "------------------------------------"
+            echo    "| rsyslog option nas been selected |"
+            echo    "------------------------------------"
+            echo    ""
+            rm -fv /etc/logstash/conf.d/logstash.conf
+            cp -v  /vagrant/logstash/logstash.conf /etc/logstash/conf.d/
+            systemctl start logstash
+            #configure rsyslog to accept data from remote hosts
+            systemctl stop rsyslog
+            rm -fv /etc/rsyslog.conf
+            cp -v /vagrant/logstash/rsyslog.conf /etc/
+            #validate configuration of central logging system
+            rsyslogd -N1
+            #copy json template for rsyslog
+            cp -v /vagrant/logstash/01-json-template.conf /etc/rsyslog.d/01-json-template.conf
+            #configure rsyslog to pass data to logstash
+            cp -v /vagrant/logstash/60-output.conf /etc/rsyslog.d/60-output.conf
+            systemctl restart rsyslog
+            netstat -na | grep 10514
+            curl -XGET 'http://srv:9200/_all/_search?q=*&pretty'
+          fi
+          if [ $rsyslog_or_filebeat == "filebeat" ]; then
+            echo    ""
+            echo    "------------------------------------"
+            echo    "| filebeat option nas been selected |"
+            echo    "------------------------------------"
+            echo    ""
+            #https://www.fosslinux.com/6084/how-to-install-elk-stack-on-ubuntu-18-04.htm
+            #due to some problems ssl part is not working...config below skips this part
+            cp -v /vagrant/logstash/*.*  /etc/logstash/conf.d/
+            systemctl enable logstash
+            systemctl start logstash
+          fi
           ;;
      esac
-
-     systemctl status elasticsearch
-     systemctl start elasticsearch
 SCRIPT
 
 
@@ -112,12 +170,18 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     srv2.vm.box = "bento/ubuntu-18.04"
     srv2.vm.hostname = "srv2"
     srv2.vm.network :private_network, ip: "192.168.1.12"
-    config.vm.provision "script1", type: "shell" do |shell|
+    config.vm.provision "misc", type: "shell" do |shell|
        shell.inline = $install_misc
     end
-    config.vm.provision "script2", type: "shell" do |shell|
+    config.vm.provision "haproxy", type: "shell" do |shell|
        shell.inline = $install_keepalived_haproxy
        shell.args = ["2"]
+    end
+    config.vm.provision "logstash_rsyslog", type: "shell", run: "never" do |shell|
+       shell.inline = $configure_rsyslog
+    end
+    config.vm.provision "logstash_filebeat", type: "shell", run: "never" do |shell|
+       shell.inline = $configure_filebeat
     end
   end
 
@@ -197,7 +261,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
     config.vm.provision "script2", type: "shell" do |shell|
         shell.inline = $install_es_cluster
-        shell.args = ["logstash"]
+        shell.args = ["logstash","filebeat"]
     end
    end
 
