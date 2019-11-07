@@ -144,7 +144,7 @@ $install_es_cluster = <<-SCRIPT
             echo    ""
             #https://www.fosslinux.com/6084/how-to-install-elk-stack-on-ubuntu-18-04.htm
             #due to some problems ssl part is not working...config below skips this part
-            cp -v /vagrant/logstash/*.*  /etc/logstash/conf.d/
+            cp -v /vagrant/logstash/filebeat/*.*  /etc/logstash/conf.d/
             systemctl enable logstash
             systemctl start logstash
           fi
