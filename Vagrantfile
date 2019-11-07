@@ -56,6 +56,8 @@ $configure_filebeat = <<-SCRIPT
   apt-get update
   apt-get install filebeat
   cp -v /vagrant/srv2/filebeat/filebeat.yml /etc/filebeat/
+  systemctl enable filebeat
+  systemctl start filebeat
 SCRIPT
 
 
