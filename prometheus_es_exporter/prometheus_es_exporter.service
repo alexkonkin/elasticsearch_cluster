@@ -1,0 +1,10 @@
+[Unit]
+Description=Prometheus ElasticSearch Exporter
+
+[Service]
+User=prometheus_es_exporter
+EnvironmentFile=/etc/sysconfig/prometheus_es_exporter
+ExecStart=/usr/local/bin/prometheus-es-exporter $OPTIONS
+
+[Install]
+WantedBy=multi-user.target

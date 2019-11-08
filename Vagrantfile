@@ -49,6 +49,11 @@ $configure_rsyslog = <<-SCRIPT
 SCRIPT
 
 $configure_filebeat = <<-SCRIPT
+  echo    ""
+  echo    "-------------------------------------------------"
+  echo    "|     filebeat has been selected to install     |"
+  echo    "-------------------------------------------------"
+  echo    ""
   #no ssl encryption to to some error (protocol mismatch 3, please see logstash part)
   wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo apt-key add -
   apt-get install apt-transport-https -y
@@ -60,8 +65,96 @@ $configure_filebeat = <<-SCRIPT
   systemctl start filebeat
 SCRIPT
 
+$configure_node_exporter = <<-SCRIPT
+  echo    ""
+  echo    "-------------------------------------------------"
+  echo    "|  node_exporter has been selected to install   |"
+  echo    "-------------------------------------------------"
+  echo    ""
+  export RELEASE="0.18.1"
+  wget https://github.com/prometheus/node_exporter/releases/download/v${RELEASE}/node_exporter-${RELEASE}.linux-amd64.tar.gz
+  tar xvf node_exporter-${RELEASE}.linux-amd64.tar.gz
+  cd node_exporter-${RELEASE}.linux-amd64/
+  cp -pv node_exporter /usr/sbin/
+  useradd node_exporter -s /sbin/nologin
+  cp -v /vagrant/node_exporter/node_exporter /etc/sysconfig/
+  cp -v /vagrant/node_exporter/node_exporter.service /etc/systemd/system/node_exporter.service
+  systemctl daemon-reload
+  systemctl enable node_exporter
+  systemctl start node_exporter
+  systemctl status node_exporter
+  echo    ""
+  echo    "-----------------------------------------------------------------"
+  echo    "|  don't forget to update prometheus.yml                        |"
+  echo    "|  and restart prometheus server to add this exporter           |"
+  echo    "-----------------------------------------------------------------"
+  echo     "  - job_name: '"$(hostname)"'"
+  echo     "      static_configs:"
+  echo     "        - targets: ['"$(hostname -i)":9100']"
+  echo    ""
+
+SCRIPT
+
+$configure_prometheus_es_exporter = <<-SCRIPT
+  echo    ""
+  echo    "-----------------------------------------------------------"
+  echo    "| prometheus_es_exporter has been selected to install     |"
+  echo    "-----------------------------------------------------------"
+  echo    ""
+  apt-get update
+  apt install python3-pip -y
+  pip3 install prometheus-es-exporter
+  groupadd --system prometheus_es_exporter
+  useradd -s /sbin/nologin -r -g prometheus_es_exporter prometheus_es_exporter
+  mkdir -pv /etc/sysconfig/
+  mkdir -pv /etc/prometheus-es-exporter/
+  cp -v /vagrant/prometheus_es_exporter/prometheus_es_exporter /etc/sysconfig/
+  cp -v /vagrant/prometheus_es_exporter/prometheus_es_exporter.service /etc/systemd/system/
+  cp -v /vagrant/prometheus_es_exporter/exporter.cfg /etc/prometheus-es-exporter/exporter.cfg
+  chown -Rv prometheus_es_exporter:prometheus_es_exporter /etc/sysconfig/prometheus_es_exporter
+  systemctl daemon-reload
+  systemctl enable prometheus_es_exporter
+  systemctl start prometheus_es_exporter
+SCRIPT
+
+$configure_prometheus = <<-SCRIPT
+  echo    ""
+  echo    "-------------------------------------------------"
+  echo    "|     prometheus has been selected to install   |"
+  echo    "-------------------------------------------------"
+  echo    ""
+
+  export RELEASE="2.13.1"
+  wget https://github.com/prometheus/prometheus/releases/download/v${RELEASE}/prometheus-${RELEASE}.linux-amd64.tar.gz
+  tar xvf prometheus-${RELEASE}.linux-amd64.tar.gz
+  cd prometheus-${RELEASE}.linux-amd64/
+  groupadd --system prometheus
+  grep prometheus /etc/group
+  useradd -s /sbin/nologin -r -g prometheus prometheus
+  mkdir -p /etc/prometheus/{rules,rules.d,files_sd}  /var/lib/prometheus
+  cp prometheus promtool /usr/local/bin/
+  cp -r consoles/ console_libraries/ /etc/prometheus/
+  cp -rv consoles/ console_libraries/ /etc/prometheus/
+
+  cp -pv /etc/systemd/system/prometheus.service /etc/systemd/system/
+  cp -pv /vagrant/prometheus/prometheus.yml     /etc/prometheus/
+
+  chown -Rv prometheus:prometheus /etc/prometheus/  /var/lib/prometheus/
+  chmod -Rv 775 /etc/prometheus/ /var/lib/prometheus/
+  promtool check config /etc/prometheus/prometheus.yml
+  systemctl start prometheus
+  systemctl status prometheus
+SCRIPT
+
+
 
 $install_misc = <<-SCRIPT
+  echo    ""
+  echo    "-------------------------------------------------"
+  echo    "|   misc section has been selected to install   |"
+  echo    "-------------------------------------------------"
+  echo    ""
+
    apt update
    apt install mc -y
    echo -e "192.168.1.11       srv1\n192.168.1.12       srv2\n192.168.1.100       srv\n172.16.94.11       es-node1\n172.16.94.12       es-node2\n172.16.94.13       es-node3\n172.16.94.14       kibana\n172.16.94.15       logstash">> /etc/hosts
@@ -159,12 +252,15 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     srv1.vm.box = "bento/ubuntu-18.04"
     srv1.vm.hostname = "srv1"
     srv1.vm.network :private_network, ip: "192.168.1.11"
-    config.vm.provision "script1", type: "shell" do |shell|
+    config.vm.provision "misc", type: "shell" do |shell|
        shell.inline = $install_misc
     end
-    config.vm.provision "script2", type: "shell" do |shell|
+    config.vm.provision "haproxy", type: "shell" do |shell|
        shell.inline = $install_keepalived_haproxy
        shell.args = ["1"]
+    end
+    config.vm.provision "node_exporter", type: "shell", run: "never" do |shell|
+       shell.inline = $configure_node_exporter
     end
   end
 
@@ -242,12 +338,18 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     kibana.vm.provider "virtualbox" do |esvm|
       esvm.memory = 1024
     end
-    config.vm.provision "script1", type: "shell" do |shell|
+    config.vm.provision "misc", type: "shell" do |shell|
        shell.inline = $install_misc
     end
-    config.vm.provision "script2", type: "shell" do |shell|
+    config.vm.provision "es_cluster", type: "shell" do |shell|
         shell.inline = $install_es_cluster
         shell.args = ["kibana"]
+    end
+    config.vm.provision "prometheus", type: "shell", run: "never" do |shell|
+        shell.inline = $configure_prometheus
+    end
+    config.vm.provision "prometheus_es_exporter", type: "shell", run: "never" do |shell|
+        shell.inline = $configure_prometheus_es_exporter
     end
    end
 

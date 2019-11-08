@@ -1,7 +1,16 @@
+#provisioning of srv1 with optional set of scripts
+#it can be configured as a rsyslog or filebeat client for logstash server
+vagrant up srv2 --provision --provision-with misc,haproxy,node_exporter
+
+
 #provisioning of srv2 with optional set of scripts
 #it can be configured as a rsyslog or filebeat client for logstash server
 vagrant up srv2 --provision --provision-with misc,haproxy,logstash_filebeat
 vagrant up srv2 --provision --provision-with misc,haproxy,logstash_rsyslog
+
+
+#
+vagrant up kibana --provision --provision-with misc,es_cluster,prometheus,prometheus_es_exporter
 
 #commands to test logstash service
 curl http://srv:9200/_cluster/health?pretty

@@ -1,11 +1,11 @@
 server {
     listen 80;
- 
+
     server_name 172.16.94.14;
- 
+
     auth_basic "Restricted Access";
     auth_basic_user_file /etc/nginx/.elkusersecret;
- 
+
     location / {
         proxy_pass http://localhost:5601;
         proxy_http_version 1.1;

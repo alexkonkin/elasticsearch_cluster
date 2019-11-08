@@ -1,0 +1,1 @@
+OPTIONS="-p 9206 -e 172.16.94.11,172.16.94.12,172.16.94.13 -c /etc/prometheus-es-exporter/exporter.cfg"
