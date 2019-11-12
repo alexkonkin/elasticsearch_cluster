@@ -179,9 +179,9 @@ $install_es_cluster = <<-SCRIPT
           cp -v /vagrant/${nod_nam}/jvm.options /etc/elasticsearch/jvm.options
           cp -v /vagrant/${nod_nam}/elasticsearch.yml /etc/elasticsearch/elasticsearch.yml
           sudo apt install elasticsearch openjdk-8-jre-headless -y
-          systemctl status elasticsearch
+          systemctl enable elasticsearch
           systemctl start elasticsearch
-
+          systemctl status elasticsearch
           ;;
      kibana)
           echo "add service and run kibana on"$nod_nam
