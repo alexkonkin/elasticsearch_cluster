@@ -142,6 +142,7 @@ $configure_prometheus = <<-SCRIPT
   chown -Rv prometheus:prometheus /etc/prometheus/  /var/lib/prometheus/
   chmod -Rv 775 /etc/prometheus/ /var/lib/prometheus/
   promtool check config /etc/prometheus/prometheus.yml
+  systemctl enable prometheus
   systemctl start prometheus
   systemctl status prometheus
 SCRIPT
