@@ -16,6 +16,12 @@ $test = <<-SCRIPT
 SCRIPT
 
 $install_keepalived_haproxy = <<-SCRIPT
+  echo    ""
+  echo    "-----------------------------------------------------------"
+  echo    "|     keepalived/haproxy has been selected to install     |"
+  echo    "-----------------------------------------------------------"
+  echo    ""
+
   node=$1
   echo ""
   echo "add service and run haproxy and keepalived on srv"$node
@@ -42,6 +48,12 @@ $install_keepalived_haproxy = <<-SCRIPT
 SCRIPT
 
 $configure_rsyslog = <<-SCRIPT
+  echo    ""
+  echo    "--------------------------------------------------------------------------"
+  echo    "| rsyslog redirection to rsyslog server has been selected to install     |"
+  echo    "--------------------------------------------------------------------------"
+  echo    ""
+
   rm -fv /etc/rsyslog.d/50-default.conf
   #copy rsyslog file that transfers syslogs to rsyslog-server
   cp -v /vagrant/srv2/50-default.conf /etc/rsyslog.d/
@@ -61,6 +73,8 @@ $configure_filebeat = <<-SCRIPT
   apt-get update
   apt-get install filebeat
   cp -v /vagrant/srv2/filebeat/filebeat.yml /etc/filebeat/
+  chown -v root:root /etc/filebeat/filebeat.yml
+  chmod -v 0644 /etc/filebeat/filebeat.yml
   systemctl enable filebeat
   systemctl start filebeat
 SCRIPT
@@ -77,8 +91,10 @@ $configure_node_exporter = <<-SCRIPT
   cd node_exporter-${RELEASE}.linux-amd64/
   cp -pv node_exporter /usr/sbin/
   useradd node_exporter -s /sbin/nologin
-  cp -v /vagrant/node_exporter/node_exporter /etc/sysconfig/
-  cp -v /vagrant/node_exporter/node_exporter.service /etc/systemd/system/node_exporter.service
+  mkdir -pv /etc/sysconfig/
+  cp -pv /vagrant/node_exporter/node_exporter /etc/sysconfig/node_exporter
+  chown -Rv node_exporter:node_exporter /etc/sysconfig/node_exporter
+  cp -pv /vagrant/node_exporter/node_exporter.service /etc/systemd/system/node_exporter.service
   systemctl daemon-reload
   systemctl enable node_exporter
   systemctl start node_exporter
@@ -116,6 +132,24 @@ $configure_prometheus_es_exporter = <<-SCRIPT
   systemctl enable prometheus_es_exporter
   systemctl start prometheus_es_exporter
 SCRIPT
+
+$install_grafana = <<-SCRIPT
+  echo    ""
+  echo    "-----------------------------------------------------------"
+  echo    "|            grafana has been selected to install         |"
+  echo    "-----------------------------------------------------------"
+  echo    ""
+  add-apt-repository "deb https://packages.grafana.com/oss/deb stable main"
+  wget -q -O - https://packages.grafana.com/gpg.key | apt-key add -
+  apt-key list grafana
+  apt-get update
+  apt-get install grafana -y
+  systemctl daemon-reload
+  systemctl enable grafana-server
+  systemctl start grafana-server
+  systemctl status grafana-server
+SCRIPT
+
 
 $configure_prometheus = <<-SCRIPT
   echo    ""
@@ -282,6 +316,9 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     config.vm.provision "logstash_filebeat", type: "shell", run: "never" do |shell|
        shell.inline = $configure_filebeat
     end
+    config.vm.provision "node_exporter", type: "shell", run: "never" do |shell|
+       shell.inline = $configure_node_exporter
+    end
   end
 
   config.vm.define "es1" do |es1|
@@ -352,6 +389,9 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     config.vm.provision "prometheus_es_exporter", type: "shell", run: "never" do |shell|
         shell.inline = $configure_prometheus_es_exporter
     end
+    config.vm.provision "grafana", type: "shell", run: "never" do |shell|
+        shell.inline = $install_grafana
+    end
    end
 
   config.vm.define "logstash" do |logstash|
@@ -367,6 +407,9 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     config.vm.provision "script2", type: "shell" do |shell|
         shell.inline = $install_es_cluster
         shell.args = ["logstash","filebeat"]
+    end
+    config.vm.provision "node_exporter", type: "shell", run: "never" do |shell|
+       shell.inline = $configure_node_exporter
     end
    end
 
